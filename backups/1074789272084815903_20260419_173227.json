@@ -1,0 +1,80 @@
+{
+  "timestamp": "20260419_173227",
+  "guild": {
+    "id": 1074789272084815903,
+    "name": "prova2",
+    "description": null,
+    "afk_timeout": 300,
+    "verification_level": "none",
+    "default_notifications": "NotificationLevel.all_messages",
+    "explicit_content_filter": "disabled",
+    "mfa_level": [
+      "disabled",
+      0
+    ]
+  },
+  "channels": [
+    {
+      "id": 1074789272084815905,
+      "name": "Canali vocali",
+      "type": "category",
+      "position": 0,
+      "category_id": null
+    },
+    {
+      "id": 1074789272084815907,
+      "name": "Generale",
+      "type": "voice",
+      "position": 0,
+      "category_id": 1074789272084815905,
+      "bitrate": 64000,
+      "user_limit": 0
+    },
+    {
+      "id": 1495474307713859786,
+      "name": "g",
+      "type": "text",
+      "position": 0,
+      "category_id": null,
+      "topic": null,
+      "slowmode_delay": 0,
+      "nsfw": false
+    }
+  ],
+  "roles": [
+    {
+      "id": 1074789272084815903,
+      "name": "@everyone",
+      "color": 0,
+      "hoist": false,
+      "mentionable": false,
+      "permissions": 2248473465835073,
+      "position": 0
+    },
+    {
+      "id": 1495472289553317908,
+      "name": "Membro",
+      "color": 5793266,
+      "hoist": true,
+      "mentionable": false,
+      "permissions": 0,
+      "position": 1
+    },
+    {
+      "id": 1495468495909945478,
+      "name": "agent",
+      "color": 0,
+      "hoist": false,
+      "mentionable": false,
+      "permissions": 8,
+      "position": 1
+    }
+  ],
+  "categories": [
+    {
+      "id": 1074789272084815905,
+      "name": "Canali vocali",
+      "position": 0
+    }
+  ]
+}

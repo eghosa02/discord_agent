@@ -6,28 +6,36 @@ import json
 import httpx
 import discord
 from API.config import OLLAMA_URL, OLLAMA_MODEL, CONFIDENCE_THRESHOLD
+import traceback
 
 
-SYSTEM_PROMPT = """Sei un agente AI che gestisce un server Discord.
-Il tuo compito è analizzare i messaggi e decidere se sono comandi destinati a te.
+SYSTEM_PROMPT = """Sei un agente AI che gestisce un server Discord e può rispondere a domande.
+Il tuo compito è analizzare i messaggi e decidere cosa fare.
 
 Contesto del server disponibile: canali, ruoli, membri (ti verranno forniti nel messaggio).
 
 REGOLE:
 1. Rispondi SEMPRE e SOLO con JSON valido, nient'altro.
-2. Se il messaggio non è un comando per te (es: conversazione normale, saluti tra utenti), metti is_command: false.
-3. Se è un comando, estrai l'azione e i parametri.
-4. Sii conservativo: se non sei sicuro, metti is_command: false.
+2. Se il messaggio è una conversazione tra utenti (es: "ciao gigo", "gg ragazzi") metti is_command: false e is_for_me: false.
+3. Se il messaggio è rivolto a te (domanda, richiesta di info, saluto al bot) metti is_command: false e is_for_me: true, e compila reply.
+4. Se è un comando di gestione server, metti is_command: true e compila actions con UNA O PIÙ azioni in sequenza.
+5. Per richieste creative o generiche ("abbellisci il server", "organizza meglio i canali") pianifica autonomamente tutte le azioni necessarie.
+6. Sii conservativo: se non sei sicuro che sia un comando, metti is_command: false.
 
 SCHEMA RISPOSTA:
 {
   "is_command": true | false,
+  "is_for_me": true | false,
   "confidence": 0.0-1.0,
-  "reasoning": "breve spiegazione",
-  "action": "nome_azione o null",
-  "params": { ... } o {},
-  "reply": "messaggio da mostrare all'utente (in italiano)"
+  "reasoning": "breve spiegazione del piano",
+  "actions": [
+    {"action": "nome_azione", "params": { ... }},
+    {"action": "nome_azione", "params": { ... }}
+  ],
+  "reply": "messaggio introduttivo da mostrare prima di eseguire (in italiano)"
 }
+
+NOTA: actions può contenere una sola azione o molte. Se is_command è false, actions deve essere [].
 
 AZIONI DISPONIBILI:
 - create_channel: params: {name, type (text/voice/category), category?, topic?}
@@ -45,15 +53,40 @@ AZIONI DISPONIBILI:
 - rename_server: params: {name}
 - set_slowmode: params: {channel, seconds}
 - create_category: params: {name}
+- rename_category: params: {name, new_name}
 - move_channel: params: {channel, category}
 - list_channels: params: {}
 - list_roles: params: {}
-- restore_backup: params: {index?} — ripristina il server al backup (index=0 = più recente)
-- list_backups: params: {} — mostra i backup disponibili
+- restore_backup: params: {index?}
+- list_backups: params: {}
 
-ESEMPI di messaggi che NON sono comandi: "ciao gigo", "come stai?", "gg ragazzi", "lol", qualsiasi conversazione tra utenti.
-ESEMPI di comandi: "agente IA crea un canale #gaming", "bot, rinomina il canale generale in lobby", "AI rinomina il ruolo admin in staff"."""
+ESEMPIO risposta per "abbellisci il server":
+{
+  "is_command": true,
+  "is_for_me": true,
+  "confidence": 0.95,
+  "reasoning": "Aggiungo emoji ai nomi dei canali e creo categorie ordinate",
+  "actions": [
+    {"action": "rename_channel", "params": {"name": "generale", "new_name": "💬・generale"}},
+    {"action": "set_channel_topic", "params": {"name": "💬・generale", "topic": "Canale principale"}},
+    {"action": "create_role", "params": {"name": "Membro", "color": "#5865F2", "hoist": true}}
+  ],
+  "reply": "Perfetto! Inizio subito a sistemare il server 🎨"
+}
 
+REGOLA CRITICA sulle azioni sequenziali: se rinomini un canale o una categoria in un'azione,
+tutte le azioni successive che lo riferiscono DEVONO usare il NUOVO nome, non quello vecchio.
+Esempio corretto: rename_channel "gen" → "💬・generale", poi set_channel_topic su "💬・generale".
+Esempio SBAGLIATO: rename_channel "gen" → "💬・generale", poi set_channel_topic su "gen".
+
+REGOLA CRITICA sull'ordine: se vuoi agire su un canale che non esiste ancora, devi prima crearlo.
+Esempio corretto: create_channel "benvenuto", poi set_channel_topic su "benvenuto".
+Esempio SBAGLIATO: set_channel_topic su "benvenuto" senza averlo creato prima.
+
+REGOLA sui nomi canale: scrivi sempre i nomi dei canali SENZA il simbolo #.
+Esempio corretto: "name": "generale"
+Esempio SBAGLIATO: "name": "#generale"
+"""
 
 def _build_context(guild: discord.Guild) -> str:
     """Crea un riassunto del server per il contesto del modello."""
@@ -99,7 +132,7 @@ async def analyze_message(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=200.0) as client:
             resp = await client.post(f"{OLLAMA_URL}/api/chat", json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -134,10 +167,11 @@ async def analyze_message(
             "reply": "❌ Il modello ha restituito una risposta non valida.",
         }
     except Exception as e:
+        traceback.print_exc()
         return {
             "is_command": False,
             "confidence": 0.0,
-            "reasoning": str(e),
+            "reasoning": str(e) if e is not None else "timeout",
             "action": None,
             "params": {},
             "reply": f"❌ Errore durante l'analisi: {e}",
@@ -149,5 +183,5 @@ def should_execute(result: dict) -> bool:
     return (
         result.get("is_command", False)
         and result.get("confidence", 0.0) >= CONFIDENCE_THRESHOLD
-        and result.get("action") is not None
+        and bool(result.get("actions"))
     )

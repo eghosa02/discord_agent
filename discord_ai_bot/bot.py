@@ -7,7 +7,7 @@ import discord
 from discord.ext import commands
 
 from API.config import DISCORD_TOKEN, ALLOWED_ROLES
-from .agent import analyze_message, should_execute
+from agent import analyze_message, should_execute
 from decisione.actions import ACTION_MAP
 from API.backup import create_backup, list_backups, load_backup, restore_backup
 
@@ -65,13 +65,18 @@ async def on_message(message: discord.Message):
         return  # Ignora silenziosamente
 
     # 2. Analisi con Gemma4
+    print(f"📩 Messaggio da {member.display_name} in #{message.channel.name}, in analisi")
     async with message.channel.typing():
         result = await analyze_message(message, guild)
+    print(f"   → Analisi completata: is_command={result.get('is_command')}")
+    print(f"   → Ragionamento: {result.get('reasoning')}")
 
-    # 3. Se non è un comando, ignora (nessuna risposta)
+    # 3. Non è un comando — ma è rivolto al bot?
     if not result.get("is_command", False):
-        # DEBUG: decommenta per vedere cosa analizza il modello
-        # print(f"[IGNORED] {message.author}: {message.content[:60]} | {result.get('reasoning','')}")
+        if result.get("is_for_me", False):
+            reply = result.get("reply", "")
+            if reply:
+                await message.channel.send(reply)
         return
 
     # 4. Confidenza troppo bassa
@@ -84,11 +89,12 @@ async def on_message(message: discord.Message):
         )
         return
 
-    action_name = result.get("action", "")
-    params = result.get("params", {})
+    actions = result.get("actions", [])
 
-    # 5. Gestione speciale: lista backup
-    if action_name == "list_backups":
+    # 5. Gestione speciale: azioni singole non distruttive (list/backup)
+    special = {s["action"] for s in actions}
+
+    if special == {"list_backups"}:
         backups = list_backups(guild.id)
         if not backups:
             await message.channel.send("📂 Nessun backup disponibile.")
@@ -100,8 +106,20 @@ async def on_message(message: discord.Message):
         await message.channel.send("\n".join(lines))
         return
 
-    # 6. Gestione speciale: restore backup
-    if action_name == "restore_backup":
+    if special == {"list_channels"}:
+        fn = ACTION_MAP["list_channels"]
+        await message.channel.send(await fn(guild, {}))
+        return
+
+    if special == {"list_roles"}:
+        fn = ACTION_MAP["list_roles"]
+        await message.channel.send(await fn(guild, {}))
+        return
+
+    # 6. Gestione speciale: restore backup (richiede conferma)
+    restore_steps = [a for a in actions if a["action"] == "restore_backup"]
+    if restore_steps:
+        params = restore_steps[0].get("params", {})
         index = int(params.get("index", 0))
         backup_data = load_backup(guild.id, index)
         if backup_data is None:
@@ -138,49 +156,89 @@ async def on_message(message: discord.Message):
         await message.channel.send(f"**Restore completato:**\n{report}")
         return
 
-    # 7. Esecuzione normale: backup → azione
-    action_fn = ACTION_MAP.get(action_name)
-    if action_fn is None:
-        await message.channel.send(
-            f"❓ Azione `{action_name}` non riconosciuta.\n"
-            f"> Ragionamento: {result.get('reasoning', '')}"
-        )
-        return
-
-    # Backup automatico prima di modificare
+    # 7. Esecuzione multi-azione: backup unico → loop azioni
+    reply = result.get("reply", "")
+    n = len(actions)
+    intro = f"{reply}\n" if reply else ""
     backup_msg = await message.channel.send(
-        f"🔄 Sto eseguendo: **{action_name}**\n"
+        f"{intro}📋 **Piano: {n} azione{'' if n == 1 else 'i'}**\n"
         f"> {result.get('reasoning', '')}\n"
-        f"⏳ Creazione backup in corso..."
+        f"💾 Creazione backup in corso..."
     )
 
     try:
         backup_path = await create_backup(guild)
-        await backup_msg.edit(
-            content=(
-                f"🔄 Esecuzione: **{action_name}**\n"
-                f"💾 Backup salvato: `{backup_path}`\n"
-                f"⏳ Esecuzione azione..."
-            )
-        )
+        await backup_msg.edit(content=backup_msg.content.replace(
+            "💾 Creazione backup in corso...",
+            f"💾 Backup salvato: `{backup_path}`\n⏳ Esecuzione in corso..."
+        ))
     except Exception as e:
-        await backup_msg.edit(
-            content=f"⚠️ Backup fallito (`{e}`), procedo comunque..."
-        )
+        await backup_msg.edit(content=backup_msg.content.replace(
+            "💾 Creazione backup in corso...",
+            f"⚠️ Backup fallito (`{e}`), procedo comunque..."
+        ))
 
-    # Esecuzione azione
-    try:
-        action_result = await action_fn(guild, params)
-        await message.channel.send(action_result)
-    except discord.Forbidden:
-        await message.channel.send(
-            "❌ Il bot non ha i permessi necessari per questa azione.\n"
-            "Assicurati che il ruolo del bot sia sopra i ruoli che vuole gestire."
-        )
-    except discord.HTTPException as e:
-        await message.channel.send(f"❌ Errore Discord API: {e}")
-    except Exception as e:
-        await message.channel.send(f"❌ Errore inaspettato: {e}")
+    # Esegui ogni azione in sequenza
+    results = []
+    # Dizionario per tracciare i rinomina: vecchio_nome → nuovo_nome
+    renamed_channels = {}
+    renamed_categories = {}
+
+    for i, step in enumerate(actions, 1):
+        action_name = step.get("action", "")
+        params = dict(step.get("params", {}))  # copia per non mutare l'originale
+
+        # Strip del # dai nomi canale (il modello a volte lo include)
+        for key in ("name", "new_name", "channel"):
+            if key in params and isinstance(params[key], str):
+                params[key] = params[key].lstrip("#")
+
+        # Risolvi automaticamente i nomi se sono stati rinominati in precedenza
+        if action_name in ("rename_channel", "delete_channel", "set_channel_topic",
+                           "set_slowmode", "move_channel"):
+            key = "name" if "name" in params else "channel"
+            if key in params and params[key] in renamed_channels:
+                params[key] = renamed_channels[params[key]]
+
+        if action_name in ("rename_category", "move_channel"):
+            if "category" in params and params["category"] in renamed_categories:
+                params["category"] = renamed_categories[params["category"]]
+
+        action_fn = ACTION_MAP.get(action_name)
+
+        if action_fn is None:
+            results.append(f"`[{i}/{n}]` ❓ `{action_name}` non riconosciuta — saltata")
+            continue
+
+        try:
+            res = await action_fn(guild, params)
+            results.append(f"`[{i}/{n}]` {res}")
+            # Aggiorna il dizionario dei rinomina per le azioni successive
+            if action_name == "rename_channel":
+                renamed_channels[step["params"].get("name", "")] = params.get("new_name", "")
+            elif action_name == "rename_category":
+                renamed_categories[step["params"].get("name", "")] = params.get("new_name", "")
+        except discord.Forbidden:
+            results.append(f"`[{i}/{n}]` ❌ `{action_name}` — permessi insufficienti")
+        except discord.HTTPException as e:
+            results.append(f"`[{i}/{n}]` ❌ `{action_name}` — errore API: {e}")
+        except Exception as e:
+            results.append(f"`[{i}/{n}]` ❌ `{action_name}` — errore: {e}")
+
+    # Manda il report finale (a blocchi se troppo lungo)
+    report = "\n".join(results)
+    if len(report) > 1900:
+        # Manda in più messaggi
+        chunk = []
+        for line in results:
+            chunk.append(line)
+            if len("\n".join(chunk)) > 1600:
+                await message.channel.send("\n".join(chunk[:-1]))
+                chunk = [line]
+        if chunk:
+            await message.channel.send("\n".join(chunk))
+    else:
+        await message.channel.send(f"**✅ Completato ({n} azioni):**\n{report}")
 
 
 @bot.command(name="backup")

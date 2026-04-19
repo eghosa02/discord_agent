@@ -200,6 +200,16 @@ async def create_category(guild: discord.Guild, params: dict) -> str:
     return f"✅ Categoria `{cat.name}` creata"
 
 
+async def rename_category(guild: discord.Guild, params: dict) -> str:
+    old_name = params.get("name", "")
+    new_name = params.get("new_name", "")
+    cat = discord.utils.get(guild.categories, name=old_name)
+    if cat is None:
+        return f"❌ Categoria `{old_name}` non trovata"
+    await cat.edit(name=new_name)
+    return f"✅ Categoria rinominata da `{old_name}` a `{new_name}`"
+
+
 async def move_channel(guild: discord.Guild, params: dict) -> str:
     ch_name = params.get("channel", "")
     cat_name = params.get("category", "")
@@ -259,6 +269,7 @@ ACTION_MAP: dict[str, Any] = {
     "rename_server": rename_server,
     "set_slowmode": set_slowmode,
     "create_category": create_category,
+    "rename_category": rename_category,
     "move_channel": move_channel,
     "list_channels": list_channels,
     "list_roles": list_roles,

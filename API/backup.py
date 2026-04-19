@@ -3,7 +3,7 @@ import json
 import os
 import glob
 from datetime import datetime
-from config import BACKUP_DIR, MAX_BACKUPS_PER_GUILD
+from API.config import BACKUP_DIR, MAX_BACKUPS_PER_GUILD
 
 
 def _backup_path(guild_id: int, timestamp: str) -> str:
