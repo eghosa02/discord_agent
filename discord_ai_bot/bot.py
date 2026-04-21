@@ -61,8 +61,8 @@ async def on_message(message: discord.Message):
         return
 
     # 1. Verifica permessi
-    if not has_permission(member, guild):
-        return  # Ignora silenziosamente
+    """if not has_permission(member, guild):
+        return  # Ignora silenziosamente"""
 
     # 2. Analisi con Gemma4
     print(f"📩 Messaggio da {member.display_name} in #{message.channel.name}, in analisi")
