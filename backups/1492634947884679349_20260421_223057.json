@@ -1,0 +1,131 @@
+{
+  "timestamp": "20260421_223057",
+  "guild": {
+    "id": 1492634947884679349,
+    "name": "TARTARUGHE NINJA GANG 🚀",
+    "description": null,
+    "afk_timeout": 300,
+    "verification_level": "none",
+    "default_notifications": "NotificationLevel.all_messages",
+    "explicit_content_filter": "disabled",
+    "mfa_level": [
+      "disabled",
+      0
+    ]
+  },
+  "channels": [
+    {
+      "id": 1492634948501373169,
+      "name": "Canali testuali",
+      "type": "category",
+      "position": 0,
+      "category_id": null
+    },
+    {
+      "id": 1492634948501373170,
+      "name": "Canali vocali",
+      "type": "category",
+      "position": 0,
+      "category_id": null
+    },
+    {
+      "id": 1492634948501373171,
+      "name": "generale",
+      "type": "text",
+      "position": 0,
+      "category_id": 1492634948501373169,
+      "topic": null,
+      "slowmode_delay": 0,
+      "nsfw": false
+    },
+    {
+      "id": 1492634948501373172,
+      "name": "Generale",
+      "type": "voice",
+      "position": 0,
+      "category_id": 1492634948501373170,
+      "bitrate": 64000,
+      "user_limit": 0
+    },
+    {
+      "id": 1494449380676206764,
+      "name": "link-di-riferimento",
+      "type": "text",
+      "position": 1,
+      "category_id": 1492634948501373170,
+      "topic": null,
+      "slowmode_delay": 0,
+      "nsfw": false
+    },
+    {
+      "id": 1494450170618712074,
+      "name": "enciclopedia-analisi-fondamentale",
+      "type": "text",
+      "position": 2,
+      "category_id": 1492634948501373170,
+      "topic": "Qui inseriamo tutti i concetti di analisi fondamentale",
+      "slowmode_delay": 0,
+      "nsfw": false
+    },
+    {
+      "id": 1494450665299116062,
+      "name": "Enciclopedia Analisi Fondamentale",
+      "type": "voice",
+      "position": 1,
+      "category_id": 1492634948501373170,
+      "bitrate": 64000,
+      "user_limit": 0
+    },
+    {
+      "id": 1494450761910845521,
+      "name": "Informatica",
+      "type": "voice",
+      "position": 2,
+      "category_id": 1492634948501373170,
+      "bitrate": 64000,
+      "user_limit": 0
+    },
+    {
+      "id": 1494450843565559948,
+      "name": "idee",
+      "type": "text",
+      "position": 3,
+      "category_id": 1492634948501373170,
+      "topic": null,
+      "slowmode_delay": 0,
+      "nsfw": false
+    }
+  ],
+  "roles": [
+    {
+      "id": 1492634947884679349,
+      "name": "@everyone",
+      "color": 0,
+      "hoist": false,
+      "mentionable": false,
+      "permissions": 2248473465835073,
+      "position": 0
+    },
+    {
+      "id": 1495484994813038624,
+      "name": "agent",
+      "color": 0,
+      "hoist": false,
+      "mentionable": false,
+      "permissions": 8,
+      "position": 1
+    }
+  ],
+  "categories": [
+    {
+      "id": 1492634948501373169,
+      "name": "Canali testuali",
+      "position": 0
+    },
+    {
+      "id": 1492634948501373170,
+      "name": "Canali vocali",
+      "position": 0
+    }
+  ]
+}
